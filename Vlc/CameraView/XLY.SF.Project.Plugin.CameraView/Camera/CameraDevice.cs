@@ -1,5 +1,5 @@
 ﻿using System;
-using AForge.Controls;
+using AForge.Video;
 using AForge.Video.DirectShow;
 
 
@@ -12,12 +12,15 @@ namespace XLY.SF.Project.CameraView
         /// </summary>
         private VideoCaptureDevice _device;
 
-        private bool _isInitialized;
+        /// <summary>
+        /// NewFrameEventHandler
+        /// </summary>
+        public event NewFrameEventHandler NewFrame;
 
         /// <summary>
-        /// 是否已经连接到了Player
+        /// 是否已经开始了
         /// </summary>
-        public bool IsConnectedToPlayer { get; private set; }
+        public bool IsStarted { get; private set; }
 
         /// <summary>
         /// 设备名字
@@ -27,32 +30,41 @@ namespace XLY.SF.Project.CameraView
         public CameraDevice(string deviceName)
         {
             Name = deviceName;
-            _device = new VideoCaptureDevice(deviceName);
-            _isInitialized = true;
+        }
+
+        private void CameraDevice_NewFrame(object sender, NewFrameEventArgs eventArgs)
+        {            
+            if (NewFrame != null)
+            {
+                NewFrame(sender, eventArgs);
+            }
         }
 
         /// <summary>
         /// 把Player连接到指定的摄像头设备上
         /// </summary>
         /// <param name="device"></param>
-        public void ConnnectDevice(VideoSourcePlayer videoSourcePlayer)
+        public void ConnnectDevice()
         {
-            if(!_isInitialized)
+            try
+            {
+                _device = new VideoCaptureDevice(Name);
+            }
+            catch (Exception ex)
             {
                 return;
             }
-            videoSourcePlayer.VideoSource = _device;
-            IsConnectedToPlayer = true;
+            _device.NewFrame -= CameraDevice_NewFrame;
+            _device.NewFrame += CameraDevice_NewFrame;
+            _device.Start();
+            IsStarted = true;
         }
 
-        public void DisconnnectDevice(VideoSourcePlayer videoSourcePlayer)
+        public void DisconnnectDevice()
         {
-            if(!_isInitialized)
-            {
-                return;
-            }
-            videoSourcePlayer.VideoSource = null;
-            IsConnectedToPlayer = false;
+            _device.Stop();
+            _device.NewFrame -= CameraDevice_NewFrame;
+            IsStarted = false;
         }
     }
 }

@@ -22,7 +22,7 @@ namespace XLY.SF.Project.CameraView
 
         private void TakePhoto_Unloaded(object sender, System.Windows.RoutedEventArgs e)
         {
-            player.Stop();
+            player.Stop(true);
         }
 
         [Import(ExportKeys.TakePhotoViewModel, typeof(ViewModelBase))]

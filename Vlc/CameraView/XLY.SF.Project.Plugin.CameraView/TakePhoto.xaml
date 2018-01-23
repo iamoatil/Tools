@@ -24,6 +24,7 @@
             <local:BrushConvertor x:Key="brushConvertor"/>
             <themes:BooleanToCollapseConverter x:Key="BoolVisibleConverter"/>
             <themes:NullOrWhiteToHideConvertor x:Key="WhiteToHideConvertor"/>
+            <themes:VisibleReverseConverter x:Key="VisibleReverseConverter"/>
             
             <Style x:Key="RadioStyle" TargetType="{x:Type RadioButton}">
                 <Setter Property="IsChecked" Value="{Binding IsSelected}"/>
@@ -93,12 +94,16 @@
                 <RadioButton Grid.Row="2" VerticalAlignment="Bottom" DataContext="{Binding DevLooksManager.DeviceLooksList[2]}" Style="{StaticResource RadioStyle}" Checked="RadioButton_Checked"/>
             </Grid>
             <Grid Grid.Column="3">
-                <local:CameraPlayer x:Name="player">
-                    <Grid>
-                        <Image Source="Resource/no-camera.png" Stretch="Fill"/>
-                        <TextBlock Text="摄像头处于断开状态" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
-                    </Grid>
-                </local:CameraPlayer>
+                <Grid Visibility="{Binding ElementName=playerGrid,Path=Visibility,Converter={StaticResource VisibleReverseConverter}}">
+                    <Image Source="Resource/no-camera.png" Stretch="Fill"/>
+                    <TextBlock Text="摄像头处于断开状态" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
+                </Grid>
+                <Grid x:Name="playerGrid" Visibility="{Binding ElementName=player,Path=IsPlaying,Converter={StaticResource BoolVisibleConverter}}">
+                    <local:CameraPlayer x:Name="player"/>
+                    <Border Width="54" Height="28" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,14,14,0" Background="Black" Opacity="0.5" CornerRadius="4">
+                        <TextBlock Text="{Binding ElementName=player,Path=Tips}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="16" Foreground="White" FontWeight="Bold" />
+                    </Border>
+                </Grid>
             </Grid>
         </Grid>
         <Grid Grid.Row="2">

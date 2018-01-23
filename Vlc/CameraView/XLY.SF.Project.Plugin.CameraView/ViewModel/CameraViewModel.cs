@@ -90,7 +90,7 @@ namespace XLY.SF.Project.CameraView
             DeviceLooks devLook = DevLooksManager.SelectedItem;
             if (devLook != null)
             {
-                player.Tips = devLook.Name;
+               // player.Tips = devLook.Name;
             }
         }
     }

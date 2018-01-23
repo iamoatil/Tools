@@ -1,9 +1,11 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
+using System.Runtime.CompilerServices;
 
 namespace XLY.SF.Project.CameraView
 {
-    public class DeviceLooksManager
+    public class DeviceLooksManager: INotifyPropertyChanged
     {
         public List<DeviceLooks> DeviceLooksList
         {
@@ -17,7 +19,6 @@ namespace XLY.SF.Project.CameraView
 
         public DeviceLooks First { get { return _deviceLooks[0]; } }
         
-
         /// <summary>
         /// 当前选中的条目
         /// </summary>
@@ -27,12 +28,12 @@ namespace XLY.SF.Project.CameraView
             {
                 foreach (DeviceLooks item in DeviceLooksList)
                 {
-                    if(item.IsSelected == true)
+                    if (item.IsSelected == true)
                     {
                         return item;
                     }
                 }
-                DeviceLooks curItem=DeviceLooksList[0];
+                DeviceLooks curItem = DeviceLooksList[0];
                 curItem.IsSelected = true;
                 return curItem;
             }
@@ -66,5 +67,17 @@ namespace XLY.SF.Project.CameraView
             return true;
         }
 
+        #region INotifyPropertyChanged
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged([CallerMemberName]string name = null)
+        {
+            if (PropertyChanged != null)
+            {
+                PropertyChanged(this, new PropertyChangedEventArgs(name));
+            }
+        }
+
+        #endregion
     }
 }

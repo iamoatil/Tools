@@ -22,7 +22,7 @@ namespace XLY.SF.Project.CameraView
 
         private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            takePhoto.player.Stop();
+            takePhoto.player.Stop(true);
         }
     }
 

@@ -1,15 +1,12 @@
-﻿using AForge.Controls;
-using ProjectExtend.Context;
+﻿using ProjectExtend.Context;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Forms;
 using System.Windows.Media.Imaging;
 
 namespace XLY.SF.Project.CameraView
@@ -18,61 +15,22 @@ namespace XLY.SF.Project.CameraView
     /// 摄像头播放器控件
     /// 当播放器为拍照时，显示默认的照片；否则显示摄像头的内容
     /// </summary>
-    class CameraPlayer:Border,IDisposable,INotifyPropertyChanged
+    class CameraPlayer: System.Windows.Controls.Image, IDisposable,INotifyPropertyChanged
     {
+        /// <summary>
+        /// 当前图片的bytes
+        /// </summary>
+        private byte[] _currentBitmapBytes;
+
+        /// <summary>
+        /// 需要一帧图像
+        /// </summary>
+        private bool _needOneFrame = false;
+
         public CameraPlayer()
         {
-            this.Loaded += (o, e) =>
-              {
-                  _timer = new System.Threading.Timer(state =>
-                  {
-                      double y = 0;
-                      int count = 0;
-
-                      for (int i = 0; i < 20; i++)
-                      {
-                          Point offset = new Point();
-                          this.Dispatcher.Invoke(new Action(() =>
-                          {
-                              Window window = Window.GetWindow(this);
-                              offset = this.TranslatePoint(new Point(), window);                              
-                          }));
-                          if (y == offset.Y
-                              && y < 70)
-                          {
-                              count++;
-                              if (count > 4)
-                              {
-                                  break;
-                              }
-                              continue;
-                          }
-                          count = 0;
-                          y = offset.Y;
-                          Thread.Sleep(100);
-                      }
-
-                      this.Dispatcher.Invoke(new Action(() => { IsInitialized2 = InnerInitialize(); }));
-                      _timer.Dispose();
-                  }, null, 0, 1000);
-              };
+            IsInitialized2 = InnerInitialize();
         }
-        private System.Threading.Timer _timer;
-
-        /// <summary>
-        /// 视频播放器
-        /// </summary>
-        private VideoSourcePlayer _videoSourcePlayer;
-
-        /// <summary>
-        /// 提示控件
-        /// </summary>
-        private System.Windows.Forms.Label _tipsLabel;        
-
-        /// <summary>
-        /// winForm空间的Host
-        /// </summary>
-        private WinFormHost _winFormHost;
 
         /// <summary>
         /// 当前摄像头设备
@@ -83,30 +41,52 @@ namespace XLY.SF.Project.CameraView
         /// 是否刷新设备停止
         /// </summary>
         private bool _isRefreshStop;
-        
+
+        /// <summary>
+        /// 是否已经开始
+        /// </summary>
+        private bool _haveStarted;
+
+        /// <summary>
+        /// 是否正在播放
+        /// </summary>
+        public bool IsPlaying
+        {
+            get
+            {
+                return _isPlaying;
+            }
+            set
+            {
+                if(_isPlaying == value)
+                {
+                    return;
+                }
+                _isPlaying = value;                
+                OnPropertyChanged();
+            }
+        }
+        private bool _isPlaying = false;
+
         /// <summary>
         /// 是否已经完成初始化
         /// </summary>
         public bool IsInitialized2 { get; private set; }
 
         /// <summary>
-        /// 摄像头的Tips
+        /// Tips
         /// </summary>
         public string Tips
         {
             get { return _tips; }
-            set
+            set 
             {
-                if (!IsInitialized2)
-                {
-                    return;
-                }
                 _tips = value;
-                _tipsLabel.Text = _tips;
                 OnPropertyChanged();
             }
         }
         private string _tips;
+
 
         private bool InnerInitialize()
         {
@@ -114,32 +94,9 @@ namespace XLY.SF.Project.CameraView
             {
                 return true;
             }
-            List<System.Windows.Forms.Control> list = new List<System.Windows.Forms.Control>();
-
-            //当前标签
-            System.Windows.Forms.Panel tipsPanel = new System.Windows.Forms.Panel();
-            tipsPanel.Size = new System.Drawing.Size(54, 22);
-            tipsPanel.BackColor =System.Drawing.Color.Black;
-            tipsPanel.Left = 535;
-            tipsPanel.Top = 15;
-            list.Add(tipsPanel);
-
-            _tipsLabel = new System.Windows.Forms.Label();
-            System.Drawing.Font font = new System.Drawing.Font(_tipsLabel.Font.FontFamily, 16,System.Drawing.FontStyle.Bold);
-            _tipsLabel.Font = font;
-            _tipsLabel.Text = "正面";
-            _tipsLabel.ForeColor = System.Drawing.Color.White;
-            tipsPanel.Controls.Add(_tipsLabel);
-
-            //摄像头实时图像控件
-            _videoSourcePlayer = new VideoSourcePlayer();
-            _videoSourcePlayer.Dock = DockStyle.Fill;
-            list.Add(_videoSourcePlayer);
-            
-            _winFormHost = new WinFormHost(this, list);
 
             CameraDeviceManager cameraDeviceManager = new CameraDeviceManager();
-            Task.Run((() => { while (!_isRefreshStop) { RefreshDevice(cameraDeviceManager); Thread.Sleep(100); } }));
+            Task.Run((() => { while (!_isRefreshStop) { RefreshDevice(cameraDeviceManager); Thread.Sleep(1000); } }));
 
             return true;
         }
@@ -153,27 +110,19 @@ namespace XLY.SF.Project.CameraView
             bool isChanged = cameraDeviceManager.DetectState();
             if (isChanged)
             {
-                if (cameraDeviceManager.DefaultCameraDevice != null)
-                {
-                    _currentCameraDevice = cameraDeviceManager.DefaultCameraDevice;
-                    
-                    AppThread.Instance.Invoke(()=>
-                    {
-                        Start();
-                    });                    
-                }
-                else
-                {
-                    _currentCameraDevice = null;
-                }
-            }
-
-            //刷新设备的运行状态
-            if (_winFormHost != null)
-            {
+                //用界面线程来对_currentCameraDevice进行设置，防止设置对_currentCameraDevice设置时的多线程问题
                 AppThread.Instance.Invoke(() =>
                 {
-                    _winFormHost.IsVisible = (_currentCameraDevice != null);
+                    if (cameraDeviceManager.DefaultCameraDevice != null)
+                    {
+                        _currentCameraDevice = cameraDeviceManager.DefaultCameraDevice;
+                        Start();
+                    }
+                    else
+                    {
+                        Stop();
+                        _currentCameraDevice = null;
+                    }
                 });
             }
         }
@@ -184,26 +133,58 @@ namespace XLY.SF.Project.CameraView
         public void Start()
         {
             if(_currentCameraDevice != null
-                && !_currentCameraDevice.IsConnectedToPlayer)
+                && !_currentCameraDevice.IsStarted)
             {
-                _currentCameraDevice.ConnnectDevice(_videoSourcePlayer);
-                _videoSourcePlayer.Start();
+                _haveStarted = true;
+                _currentCameraDevice.NewFrame -= _currentCameraDevice_NewFrame;
+                _currentCameraDevice.NewFrame += _currentCameraDevice_NewFrame;
+                _currentCameraDevice.ConnnectDevice();
+            }
+        }
+
+        private void _currentCameraDevice_NewFrame(object sender, AForge.Video.NewFrameEventArgs eventArgs)
+        {
+            IsPlaying = _haveStarted;
+            try
+            {
+                BitmapImage bi;
+                using (var bitmap = (Bitmap)eventArgs.Frame.Clone())
+                {
+                    bi = bitmap.ToBitmapImage();
+                }
+                bi.Freeze(); // avoid cross thread operations and prevents leaks
+                Dispatcher.BeginInvoke(new ThreadStart(delegate { this.Source = bi; }));
+
+                if (_needOneFrame)
+                {
+                    using (MemoryStream bitmapStream = new MemoryStream())
+                    {
+                        eventArgs.Frame.Save(bitmapStream, ImageFormat.Bmp);
+                        _currentBitmapBytes = bitmapStream.GetBuffer();
+                        _needOneFrame = false;
+                    }
+                }
+            }
+            catch (Exception exc)
+            {
             }
         }
 
         /// <summary>
         /// 摄像头停止捕获
         /// </summary>
-        public void Stop()
+        public void Stop(bool isClosed = false)
         {
-            _isRefreshStop = true;
+            _isRefreshStop = isClosed;
 
             if (_currentCameraDevice != null
-               && _currentCameraDevice.IsConnectedToPlayer)
+               && _currentCameraDevice.IsStarted)
             {
-                _videoSourcePlayer.Stop();
-                _currentCameraDevice.DisconnnectDevice(_videoSourcePlayer);
-            }           
+                _haveStarted = false;
+                _currentCameraDevice.DisconnnectDevice();
+                _currentCameraDevice.NewFrame -= _currentCameraDevice_NewFrame;               
+            }
+            IsPlaying = false;
         }
 
         /// <summary>
@@ -214,57 +195,43 @@ namespace XLY.SF.Project.CameraView
         {
             string dir = Path.GetDirectoryName(path);
             //修整目录
-            if(!dir.EndsWith("\\"))
+            if (!dir.EndsWith("\\"))
             {
                 dir += "\\";
             }
-            if(!Directory.Exists(dir))
+            if (!Directory.Exists(dir))
             {
                 Directory.CreateDirectory(dir);
             }
 
-            try
+            if (_currentCameraDevice == null
+              || !_currentCameraDevice.IsStarted)
             {
-                if ((_videoSourcePlayer != null) && (_videoSourcePlayer.IsRunning))
+                return;
+            }
+            //等待获取最新的图片bytes
+            _needOneFrame = true;
+            int count = 0;
+            while (true)
+            {
+                if (!_needOneFrame)
                 {
-                    BitmapSource image = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(
-                                _videoSourcePlayer.GetCurrentVideoFrame().GetHbitmap(),
-                                IntPtr.Zero,
-                                Int32Rect.Empty,
-                                BitmapSizeOptions.FromEmptyOptions());
+                    break;
+                }
+                Thread.Sleep(10);
+                count++;
 
-                    BitmapEncoder encoder = new JpegBitmapEncoder();
-                    encoder.Frames.Add(BitmapFrame.Create(image));
-                    MemoryStream ms = new MemoryStream();
-                    encoder.Save(ms);
-                    // 剪切图片
-
-                    System.Drawing.Image initImage = System.Drawing.Image.FromStream(ms, true);
-
-                    //对象实例化
-                    System.Drawing.Bitmap pickedImage = new System.Drawing.Bitmap((int)image.PixelWidth, (int)image.PixelHeight);
-                    System.Drawing.Graphics pickedG = System.Drawing.Graphics.FromImage(pickedImage);
-                    //设置质量
-                    pickedG.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                    pickedG.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-                    //定位
-                    System.Drawing.Rectangle fromR = new System.Drawing.Rectangle(0, 0, (int)image.PixelWidth, (int)image.PixelHeight);
-                    System.Drawing.Rectangle toR = new System.Drawing.Rectangle(0, 0, (int)image.PixelWidth, (int)image.PixelHeight);
-                    //画图
-                    pickedG.DrawImage(initImage, toR, fromR, System.Drawing.GraphicsUnit.Pixel);
-
-                    pickedImage.Save(path);
-
-                    // 释放资源 
-
-                    ms.Close();
-                    pickedImage.Dispose();
-                    pickedG.Dispose();
-
+                if (_currentCameraDevice == null
+                || !_currentCameraDevice.IsStarted
+                || count > 100)
+                {
+                    return;
                 }
             }
-            catch (Exception ex)
+            //把字节数组写入文件
+            if (_currentBitmapBytes != null)
             {
+                File.WriteAllBytes(path, _currentBitmapBytes);
             }
         }
 
@@ -308,4 +275,5 @@ namespace XLY.SF.Project.CameraView
         }
         #endregion
     }
+    
 }
